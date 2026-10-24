@@ -1,0 +1,39 @@
+name: Build IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          mkdir -p out
+          for PROJ in $(find . -maxdepth 4 -name "*.xcodeproj" -not -path "./.git/*"); do
+            NAME=$(basename "$PROJ" .xcodeproj)
+            DIR=$(dirname "$PROJ")
+            echo "=== $NAME ==="
+            (cd "$DIR" && xcodebuild \
+              -project "$NAME.xcodeproj" \
+              -target "$NAME" \
+              -configuration Release \
+              -sdk iphoneos \
+              SYMROOT="$GITHUB_WORKSPACE/build/$NAME" \
+              CODE_SIGNING_ALLOWED=NO \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGN_IDENTITY="" \
+              build)
+            rm -rf Payload && mkdir Payload
+            cp -R "build/$NAME/Release-iphoneos/$NAME.app" Payload/
+            zip -qr "out/$NAME.ipa" Payload
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ipa-files
+          path: out/*.ipa
